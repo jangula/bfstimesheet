@@ -17,12 +17,11 @@ export default async function ApprovalsPage() {
   let weeks: Array<{ id: string; userId: string; weekStart: string; submittedAt: Date | null }> = [];
 
   if (user.role === "partner" || user.role === "admin") {
-    const rows = db
+    const rows = await db
       .select()
       .from(timesheetWeeks)
       .where(eq(timesheetWeeks.status, "submitted"))
-      .orderBy(desc(timesheetWeeks.submittedAt))
-      .all();
+      .orderBy(desc(timesheetWeeks.submittedAt));
     weeks = rows.map((r) => ({
       id: r.id,
       userId: r.userId,
@@ -30,15 +29,14 @@ export default async function ApprovalsPage() {
       submittedAt: r.submittedAt ?? null,
     }));
   } else {
-    const directReports = db.select().from(users).where(eq(users.managerId, user.id)).all();
+    const directReports = await db.select().from(users).where(eq(users.managerId, user.id));
     const ids = directReports.map((u) => u.id);
     if (ids.length) {
-      const rows = db
+      const rows = await db
         .select()
         .from(timesheetWeeks)
         .where(and(eq(timesheetWeeks.status, "submitted"), inArray(timesheetWeeks.userId, ids)))
-        .orderBy(desc(timesheetWeeks.submittedAt))
-        .all();
+        .orderBy(desc(timesheetWeeks.submittedAt));
       weeks = rows.map((r) => ({
         id: r.id,
         userId: r.userId,
@@ -48,17 +46,22 @@ export default async function ApprovalsPage() {
     }
   }
 
-  const allUsers = db.select().from(users).all();
+  const allUsers = await db.select().from(users);
   const userById = new Map(allUsers.map((u) => [u.id, u] as const));
-  const allEng = db.select().from(engagements).all();
+  const allEng = await db.select().from(engagements);
   const engById = new Map(allEng.map((e) => [e.id, e] as const));
 
-  const cards = weeks.map((w) => {
-    const u = userById.get(w.userId)!;
-    const totals = totalsForWeek(w.id);
-    const entries = db.select().from(timesheetEntries).where(eq(timesheetEntries.weekId, w.id)).all();
-    return { week: w, u, totals, entries };
-  });
+  const cards = await Promise.all(
+    weeks.map(async (w) => {
+      const u = userById.get(w.userId)!;
+      const totals = await totalsForWeek(w.id);
+      const entries = await db
+        .select()
+        .from(timesheetEntries)
+        .where(eq(timesheetEntries.weekId, w.id));
+      return { week: w, u, totals, entries };
+    }),
+  );
 
   return (
     <div>

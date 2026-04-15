@@ -1,63 +1,61 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, doublePrecision, boolean, timestamp } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
-  role: text("role", { enum: ["consultant", "lead", "partner", "admin"] }).notNull(),
+  role: text("role").$type<"consultant" | "lead" | "partner" | "admin">().notNull(),
   managerId: text("manager_id"),
   department: text("department").notNull(),
-  contractedHoursPerWeek: real("contracted_hours_per_week").notNull().default(40),
-  targetUtilisationPct: real("target_utilisation_pct").notNull().default(0.7),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  contractedHoursPerWeek: doublePrecision("contracted_hours_per_week").notNull().default(40),
+  targetUtilisationPct: doublePrecision("target_utilisation_pct").notNull().default(0.7),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
-export const engagements = sqliteTable("engagements", {
+export const engagements = pgTable("engagements", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   client: text("client"),
   fund: text("fund"),
-  billable: integer("billable", { mode: "boolean" }).notNull().default(true),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
-  budgetHours: real("budget_hours"),
+  billable: boolean("billable").notNull().default(true),
+  active: boolean("active").notNull().default(true),
+  budgetHours: doublePrecision("budget_hours"),
 });
 
-export const timesheetWeeks = sqliteTable("timesheet_weeks", {
+export const timesheetWeeks = pgTable("timesheet_weeks", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),
   weekStart: text("week_start").notNull(), // ISO date, always Monday
-  status: text("status", {
-    enum: ["draft", "submitted", "approved", "rejected"],
-  }).notNull().default("draft"),
-  submittedAt: integer("submitted_at", { mode: "timestamp" }),
+  status: text("status").$type<"draft" | "submitted" | "approved" | "rejected">().notNull().default("draft"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
   approvedBy: text("approved_by"),
-  approvedAt: integer("approved_at", { mode: "timestamp" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
   rejectionNote: text("rejection_note"),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
-export const timesheetEntries = sqliteTable("timesheet_entries", {
+export const timesheetEntries = pgTable("timesheet_entries", {
   id: text("id").primaryKey(),
   weekId: text("week_id").notNull().references(() => timesheetWeeks.id, { onDelete: "cascade" }),
   engagementId: text("engagement_id").notNull().references(() => engagements.id),
   date: text("date").notNull(), // ISO date
-  hours: real("hours").notNull(),
+  hours: doublePrecision("hours").notNull(),
   note: text("note"),
   activityCode: text("activity_code"),
 });
 
-export const escalations = sqliteTable("escalations", {
+export const escalations = pgTable("escalations", {
   id: text("id").primaryKey(),
   weekId: text("week_id").notNull().references(() => timesheetWeeks.id),
   tier: integer("tier").notNull(),
-  sentAt: integer("sent_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().default(sql`now()`),
   recipientEmail: text("recipient_email").notNull(),
   channel: text("channel").notNull().default("email"),
 });
 
-export const auditLog = sqliteTable("audit_log", {
+export const auditLog = pgTable("audit_log", {
   id: text("id").primaryKey(),
   actorId: text("actor_id"),
   actorName: text("actor_name"),
@@ -65,31 +63,31 @@ export const auditLog = sqliteTable("audit_log", {
   entityId: text("entity_id").notNull(),
   action: text("action").notNull(),
   diff: text("diff"), // JSON string
-  at: integer("at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  at: timestamp("at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
-export const holidays = sqliteTable("holidays", {
+export const holidays = pgTable("holidays", {
   date: text("date").primaryKey(), // ISO date
   name: text("name").notNull(),
   country: text("country").notNull().default("NA"),
 });
 
-export const policy = sqliteTable("policy", {
+export const policy = pgTable("policy", {
   key: text("key").primaryKey(),
   value: text("value").notNull(), // JSON string
 });
 
 // Virtual clock — lets the demo fast-forward "today" without waiting real days
-export const clock = sqliteTable("clock", {
+export const clock = pgTable("clock", {
   id: integer("id").primaryKey(),
   today: text("today").notNull(), // ISO date override
 });
 
 // Mock email outbox — escalation engine "sends" into this table so the demo
 // can show the exact body without needing Resend + domain warm-up.
-export const sentEmails = sqliteTable("sent_emails", {
+export const sentEmails = pgTable("sent_emails", {
   id: text("id").primaryKey(),
-  sentAt: integer("sent_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().default(sql`now()`),
   toEmail: text("to_email").notNull(),
   toName: text("to_name").notNull(),
   subject: text("subject").notNull(),

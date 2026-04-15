@@ -21,13 +21,14 @@ export type EscalationRun = {
   }>;
 };
 
-function isHoliday(iso: string): boolean {
-  return db.select().from(holidays).where(eq(holidays.date, iso)).get() !== undefined;
+async function isHoliday(iso: string): Promise<boolean> {
+  const rows = await db.select().from(holidays).where(eq(holidays.date, iso)).limit(1);
+  return rows[0] !== undefined;
 }
 
-function isWorkingDay(d: Date): boolean {
+async function isWorkingDay(d: Date): Promise<boolean> {
   if (isWeekend(d)) return false;
-  if (isHoliday(format(d, "yyyy-MM-dd"))) return false;
+  if (await isHoliday(format(d, "yyyy-MM-dd"))) return false;
   return true;
 }
 
@@ -41,16 +42,17 @@ function lastCompletedWeekMonday(runDate: string): string {
 }
 
 /** Core reusable logic; called by cron and by simulate-day. */
-export function runEscalation(runDate: string): EscalationRun {
+export async function runEscalation(runDate: string): Promise<EscalationRun> {
   const actions: EscalationRun["actions"] = [];
   const d = parseISO(runDate);
 
   // Skip non-working days entirely
-  if (!isWorkingDay(d)) return { runDate, actions };
+  if (!(await isWorkingDay(d))) return { runDate, actions };
 
   const weekMonday = lastCompletedWeekMonday(runDate);
-  const allUsers = db.select().from(users).all();
-  const policyRow = db.select().from(policy).where(eq(policy.key, "escalation")).get();
+  const allUsers = await db.select().from(users);
+  const policyRows = await db.select().from(policy).where(eq(policy.key, "escalation")).limit(1);
+  const policyRow = policyRows[0];
   const p = policyRow ? (JSON.parse(policyRow.value) as {
     mondayReminderDow?: number;
     leadDigestDow?: number;
@@ -65,11 +67,12 @@ export function runEscalation(runDate: string): EscalationRun {
   const outstandingByManager = new Map<string, Array<{ userId: string; userName: string }>>();
 
   for (const u of allUsers) {
-    const w = db
+    const wRows = await db
       .select()
       .from(timesheetWeeks)
       .where(and(eq(timesheetWeeks.userId, u.id), eq(timesheetWeeks.weekStart, weekMonday)))
-      .get();
+      .limit(1);
+    const w = wRows[0];
     const submitted =
       w && (w.status === "submitted" || w.status === "approved");
     if (!submitted) {
@@ -92,17 +95,15 @@ export function runEscalation(runDate: string): EscalationRun {
       if (u.role !== "consultant" && u.role !== "lead") continue;
       const subject = `Timesheet reminder · week of ${weekMonday}`;
       const body = `Hi ${u.name},\n\nFriendly reminder to submit your timesheet for the week of ${weekMonday}.\n\nIt takes about two minutes — open the timesheet page, fill in any remaining hours, and click Submit.\n\nThanks,\nBFS Finance`;
-      db.insert(sentEmails)
-        .values({
-          id: randomUUID(),
-          toEmail: u.email,
-          toName: u.name,
-          subject,
-          body,
-          tier: 1,
-          kind: "monday_reminder",
-        })
-        .run();
+      await db.insert(sentEmails).values({
+        id: randomUUID(),
+        toEmail: u.email,
+        toName: u.name,
+        subject,
+        body,
+        tier: 1,
+        kind: "monday_reminder",
+      });
       actions.push({ type: "monday_reminder", to: u.email, toName: u.name, subject });
     }
   }
@@ -116,17 +117,15 @@ export function runEscalation(runDate: string): EscalationRun {
       const names = list.map((x) => `  · ${x.userName}`).join("\n");
       const subject = `Outstanding timesheets from your team · ${weekMonday}`;
       const body = `Hi ${mgr.name},\n\nThe following team members still haven't submitted their timesheet for the week of ${weekMonday}:\n\n${names}\n\nA gentle nudge would help us close the books on time.\n\nThanks,\nBFS Finance`;
-      db.insert(sentEmails)
-        .values({
-          id: randomUUID(),
-          toEmail: mgr.email,
-          toName: mgr.name,
-          subject,
-          body,
-          tier: 2,
-          kind: "lead_digest",
-        })
-        .run();
+      await db.insert(sentEmails).values({
+        id: randomUUID(),
+        toEmail: mgr.email,
+        toName: mgr.name,
+        subject,
+        body,
+        tier: 2,
+        kind: "lead_digest",
+      });
       actions.push({
         type: "lead_digest",
         to: mgr.email,
@@ -145,17 +144,15 @@ export function runEscalation(runDate: string): EscalationRun {
       const body = `Hi ${partner.name},\n\n${outstandingByUser.size} timesheet${
         outstandingByUser.size === 1 ? "" : "s"
       } remained outstanding for ${weekMonday}.\n\nSee the partner dashboard for the compliance heat map.\n\nBFS Finance`;
-      db.insert(sentEmails)
-        .values({
-          id: randomUUID(),
-          toEmail: partner.email,
-          toName: partner.name,
-          subject,
-          body,
-          tier: 3,
-          kind: "month_end_flag",
-        })
-        .run();
+      await db.insert(sentEmails).values({
+        id: randomUUID(),
+        toEmail: partner.email,
+        toName: partner.name,
+        subject,
+        body,
+        tier: 3,
+        kind: "month_end_flag",
+      });
       actions.push({ type: "month_end_flag", to: partner.email, toName: partner.name, subject });
     }
   }
@@ -163,15 +160,16 @@ export function runEscalation(runDate: string): EscalationRun {
   return { runDate, actions };
 }
 
-export function nonComplianceForWeek(weekStart: string) {
-  const all = db.select().from(users).all();
+export async function nonComplianceForWeek(weekStart: string) {
+  const all = await db.select().from(users);
   const out: Array<{ user: (typeof all)[number]; status: string }> = [];
   for (const u of all) {
-    const w = db
+    const wRows = await db
       .select()
       .from(timesheetWeeks)
       .where(and(eq(timesheetWeeks.userId, u.id), eq(timesheetWeeks.weekStart, weekStart)))
-      .get();
+      .limit(1);
+    const w = wRows[0];
     const status = w?.status ?? "missing";
     if (status !== "approved" && status !== "submitted") {
       out.push({ user: u, status });

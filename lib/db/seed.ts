@@ -1,3 +1,6 @@
+// Must come first — imports are hoisted, so env loading must be a side-effect
+// import that precedes `./index` which reads DATABASE_URL.
+import "./load-env";
 import { db } from "./index";
 import * as s from "./schema";
 import { addDays, format, startOfWeek } from "date-fns";
@@ -72,33 +75,31 @@ async function main() {
   console.log("Seeding…");
 
   // Clear (idempotent) — order matters for FK constraints
-  db.delete(s.auditLog).run();
-  db.delete(s.sentEmails).run();
-  db.delete(s.escalations).run();
-  db.delete(s.timesheetEntries).run();
-  db.delete(s.timesheetWeeks).run();
-  db.delete(s.users).run();
-  db.delete(s.engagements).run();
-  db.delete(s.holidays).run();
-  db.delete(s.policy).run();
-  db.delete(s.clock).run();
+  await db.delete(s.auditLog);
+  await db.delete(s.sentEmails);
+  await db.delete(s.escalations);
+  await db.delete(s.timesheetEntries);
+  await db.delete(s.timesheetWeeks);
+  await db.delete(s.users);
+  await db.delete(s.engagements);
+  await db.delete(s.holidays);
+  await db.delete(s.policy);
+  await db.delete(s.clock);
 
   // Users
   const userIds: string[] = PEOPLE.map(() => randomUUID());
   for (let i = 0; i < PEOPLE.length; i++) {
     const p = PEOPLE[i];
-    db.insert(s.users)
-      .values({
-        id: userIds[i],
-        email: email(p.name),
-        name: p.name,
-        role: p.role,
-        managerId: p.managerIdx !== undefined ? userIds[p.managerIdx] : null,
-        department: p.dept,
-        contractedHoursPerWeek: 40,
-        targetUtilisationPct: 0.7,
-      })
-      .run();
+    await db.insert(s.users).values({
+      id: userIds[i],
+      email: email(p.name),
+      name: p.name,
+      role: p.role,
+      managerId: p.managerIdx !== undefined ? userIds[p.managerIdx] : null,
+      department: p.dept,
+      contractedHoursPerWeek: 40,
+      targetUtilisationPct: 0.7,
+    });
   }
 
   // Engagements
@@ -106,41 +107,37 @@ async function main() {
   for (const e of ENGAGEMENTS) {
     const id = randomUUID();
     engIds.set(e.code, id);
-    db.insert(s.engagements)
-      .values({
-        id,
-        code: e.code,
-        name: e.name,
-        client: e.client ?? null,
-        fund: e.fund ?? null,
-        billable: e.billable,
-        active: true,
-        budgetHours: e.budgetHours ?? null,
-      })
-      .run();
+    await db.insert(s.engagements).values({
+      id,
+      code: e.code,
+      name: e.name,
+      client: e.client ?? null,
+      fund: e.fund ?? null,
+      billable: e.billable,
+      active: true,
+      budgetHours: e.budgetHours ?? null,
+    });
   }
 
   // Holidays
   for (const [date, name] of NAMIBIAN_HOLIDAYS_2026) {
-    db.insert(s.holidays).values({ date, name, country: "NA" }).run();
+    await db.insert(s.holidays).values({ date, name, country: "NA" });
   }
 
   // Policy defaults
-  db.insert(s.policy)
-    .values({
-      key: "escalation",
-      value: JSON.stringify({
-        mondayReminderHour: 9,
-        leadDigestDay: 3, // Wednesday
-        targetUtilisation: 0.7,
-        deadlineDay: 5, // Friday
-      }),
-    })
-    .run();
+  await db.insert(s.policy).values({
+    key: "escalation",
+    value: JSON.stringify({
+      mondayReminderHour: 9,
+      leadDigestDay: 3, // Wednesday
+      targetUtilisation: 0.7,
+      deadlineDay: 5, // Friday
+    }),
+  });
 
   // Virtual clock — pin to a Monday in mid-April 2026 for deterministic demos
   const today = "2026-04-13"; // Monday
-  db.insert(s.clock).values({ id: 1, today }).run();
+  await db.insert(s.clock).values({ id: 1, today });
 
   // Historical timesheets for past 4 weeks (so the dashboard is alive)
   const anchor = new Date("2026-04-13T00:00:00Z");
@@ -160,17 +157,15 @@ async function main() {
       // Partners submit later / less often
       const status = userRole === "partner" && Math.random() < 0.3 ? "submitted" : "approved";
 
-      db.insert(s.timesheetWeeks)
-        .values({
-          id: weekId,
-          userId: userIds[i],
-          weekStart: weekStartStr,
-          status,
-          submittedAt: new Date(weekStart.getTime() + 5 * 86400_000),
-          approvedBy: status === "approved" ? userIds[PEOPLE[i].managerIdx ?? 0] : null,
-          approvedAt: status === "approved" ? new Date(weekStart.getTime() + 6 * 86400_000) : null,
-        })
-        .run();
+      await db.insert(s.timesheetWeeks).values({
+        id: weekId,
+        userId: userIds[i],
+        weekStart: weekStartStr,
+        status,
+        submittedAt: new Date(weekStart.getTime() + 5 * 86400_000),
+        approvedBy: status === "approved" ? userIds[PEOPLE[i].managerIdx ?? 0] : null,
+        approvedAt: status === "approved" ? new Date(weekStart.getTime() + 6 * 86400_000) : null,
+      });
 
       // 5 working days of entries
       for (let d = 0; d < 5; d++) {
@@ -190,16 +185,14 @@ async function main() {
           const hrs = k === n - 1 ? remaining : Math.min(remaining, 1 + Math.floor(Math.random() * 5));
           remaining -= hrs;
           if (hrs <= 0) continue;
-          db.insert(s.timesheetEntries)
-            .values({
-              id: randomUUID(),
-              weekId,
-              engagementId: engIds.get(code)!,
-              date: day,
-              hours: hrs,
-              note: null,
-            })
-            .run();
+          await db.insert(s.timesheetEntries).values({
+            id: randomUUID(),
+            weekId,
+            engagementId: engIds.get(code)!,
+            date: day,
+            hours: hrs,
+            note: null,
+          });
         }
       }
     }
@@ -212,7 +205,9 @@ async function main() {
   console.log(`  virtual today: ${today}`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

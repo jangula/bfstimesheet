@@ -10,8 +10,8 @@ export async function getCurrentUser(): Promise<User | null> {
   const jar = await cookies();
   const id = jar.get(COOKIE)?.value;
   if (!id) return null;
-  const row = db.select().from(users).where(eq(users.id, id)).get();
-  return row ?? null;
+  const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return rows[0] ?? null;
 }
 
 export async function requireUser(): Promise<User> {

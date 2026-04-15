@@ -10,8 +10,8 @@ export type WeekTotals = {
   byEngagement: Record<string, number>;
 };
 
-export function totalsForWeek(weekId: string): WeekTotals {
-  const rows = db
+export async function totalsForWeek(weekId: string): Promise<WeekTotals> {
+  const rows = await db
     .select({
       hours: timesheetEntries.hours,
       billable: engagements.billable,
@@ -19,8 +19,7 @@ export function totalsForWeek(weekId: string): WeekTotals {
     })
     .from(timesheetEntries)
     .innerJoin(engagements, eq(timesheetEntries.engagementId, engagements.id))
-    .where(eq(timesheetEntries.weekId, weekId))
-    .all();
+    .where(eq(timesheetEntries.weekId, weekId));
 
   let total = 0;
   let billable = 0;
@@ -39,8 +38,8 @@ export function totalsForWeek(weekId: string): WeekTotals {
   };
 }
 
-export function firmWideUtilisation(fromIso: string, toIso: string) {
-  const rows = db
+export async function firmWideUtilisation(fromIso: string, toIso: string) {
+  const rows = await db
     .select({
       hours: timesheetEntries.hours,
       billable: engagements.billable,
@@ -48,8 +47,7 @@ export function firmWideUtilisation(fromIso: string, toIso: string) {
     .from(timesheetEntries)
     .innerJoin(engagements, eq(timesheetEntries.engagementId, engagements.id))
     .innerJoin(timesheetWeeks, eq(timesheetEntries.weekId, timesheetWeeks.id))
-    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)))
-    .all();
+    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)));
   let total = 0;
   let billable = 0;
   for (const r of rows) {
@@ -59,8 +57,8 @@ export function firmWideUtilisation(fromIso: string, toIso: string) {
   return { total, billable, nonBillable: total - billable, utilisation: total === 0 ? 0 : billable / total };
 }
 
-export function hoursByEngagement(fromIso: string, toIso: string) {
-  const rows = db
+export async function hoursByEngagement(fromIso: string, toIso: string) {
+  const rows = await db
     .select({
       code: engagements.code,
       name: engagements.name,
@@ -70,8 +68,7 @@ export function hoursByEngagement(fromIso: string, toIso: string) {
     .from(timesheetEntries)
     .innerJoin(engagements, eq(timesheetEntries.engagementId, engagements.id))
     .innerJoin(timesheetWeeks, eq(timesheetEntries.weekId, timesheetWeeks.id))
-    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)))
-    .all();
+    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)));
   const agg = new Map<string, { code: string; name: string; billable: boolean; hours: number }>();
   for (const r of rows) {
     const prev = agg.get(r.code);
@@ -81,8 +78,8 @@ export function hoursByEngagement(fromIso: string, toIso: string) {
   return [...agg.values()].sort((a, b) => b.hours - a.hours);
 }
 
-export function weeklyUtilisationTrend(fromIso: string, toIso: string) {
-  const rows = db
+export async function weeklyUtilisationTrend(fromIso: string, toIso: string) {
+  const rows = await db
     .select({
       weekStart: timesheetWeeks.weekStart,
       hours: timesheetEntries.hours,
@@ -91,8 +88,7 @@ export function weeklyUtilisationTrend(fromIso: string, toIso: string) {
     .from(timesheetEntries)
     .innerJoin(engagements, eq(timesheetEntries.engagementId, engagements.id))
     .innerJoin(timesheetWeeks, eq(timesheetEntries.weekId, timesheetWeeks.id))
-    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)))
-    .all();
+    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)));
   const byWeek = new Map<string, { total: number; billable: number }>();
   for (const r of rows) {
     const cur = byWeek.get(r.weekStart) ?? { total: 0, billable: 0 };
@@ -110,8 +106,8 @@ export function weeklyUtilisationTrend(fromIso: string, toIso: string) {
     }));
 }
 
-export function hoursByUser(fromIso: string, toIso: string) {
-  const rows = db
+export async function hoursByUser(fromIso: string, toIso: string) {
+  const rows = await db
     .select({
       userId: timesheetWeeks.userId,
       hours: timesheetEntries.hours,
@@ -120,9 +116,8 @@ export function hoursByUser(fromIso: string, toIso: string) {
     .from(timesheetEntries)
     .innerJoin(engagements, eq(timesheetEntries.engagementId, engagements.id))
     .innerJoin(timesheetWeeks, eq(timesheetEntries.weekId, timesheetWeeks.id))
-    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)))
-    .all();
-  const all = db.select().from(users).all();
+    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)));
+  const all = await db.select().from(users);
   const byId = new Map(all.map((u) => [u.id, u] as const));
   const agg = new Map<string, { user: (typeof all)[number]; total: number; billable: number }>();
   for (const r of rows) {

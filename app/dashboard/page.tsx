@@ -20,22 +20,22 @@ export default async function DashboardPage() {
   if (!user) redirect("/");
   if (user.role !== "partner" && user.role !== "admin") redirect("/timesheet");
 
-  const todayIso = getVirtualTodayISO();
+  const todayIso = await getVirtualTodayISO();
   const today = parseISO(todayIso);
   const monthStart = format(subMonths(today, 1), "yyyy-MM-dd");
   const monthEnd = todayIso;
 
-  const firm = firmWideUtilisation(monthStart, monthEnd);
-  const engagements = hoursByEngagement(monthStart, monthEnd);
-  const users = hoursByUser(monthStart, monthEnd);
+  const firm = await firmWideUtilisation(monthStart, monthEnd);
+  const engagements = await hoursByEngagement(monthStart, monthEnd);
+  const users = await hoursByUser(monthStart, monthEnd);
   const trendStart = format(subMonths(today, 3), "yyyy-MM-dd");
-  const trend = weeklyUtilisationTrend(trendStart, todayIso);
+  const trend = await weeklyUtilisationTrend(trendStart, todayIso);
 
   const lastMonday = format(
     subDays(startOfWeek(today, { weekStartsOn: 1 }), 7),
     "yyyy-MM-dd",
   );
-  const nonCompliant = nonComplianceForWeek(lastMonday);
+  const nonCompliant = await nonComplianceForWeek(lastMonday);
 
   return (
     <div>

@@ -6,7 +6,7 @@ import { getVirtualTodayISO } from "@/lib/clock";
 // For local demo, hit /api/cron/escalate manually or use the simulate-day button.
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const date = url.searchParams.get("date") ?? getVirtualTodayISO();
-  const result = runEscalation(date);
+  const date = url.searchParams.get("date") ?? (await getVirtualTodayISO());
+  const result = await runEscalation(date);
   return NextResponse.json(result);
 }

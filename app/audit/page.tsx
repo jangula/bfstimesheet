@@ -10,7 +10,7 @@ export default async function AuditPage() {
   if (!user) redirect("/");
   if (user.role !== "partner" && user.role !== "admin") redirect("/timesheet");
 
-  const rows = db.select().from(auditLog).orderBy(desc(auditLog.at)).limit(500).all();
+  const rows = await db.select().from(auditLog).orderBy(desc(auditLog.at)).limit(500);
 
   return (
     <div>

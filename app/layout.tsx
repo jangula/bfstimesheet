@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  const today = getVirtualTodayISO();
+  const today = await getVirtualTodayISO();
 
   return (
     <html lang="en">

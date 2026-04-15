@@ -35,7 +35,7 @@ export default async function ReportsPage({
   if (user.role !== "partner" && user.role !== "admin") redirect("/timesheet");
 
   const sp = await searchParams;
-  const today = getVirtualTodayISO();
+  const today = await getVirtualTodayISO();
   const from = sp.from ?? format(subMonths(parseISO(today), 1), "yyyy-MM-dd");
   const to = sp.to ?? today;
   const userFilter = sp.user ?? "";
@@ -43,12 +43,12 @@ export default async function ReportsPage({
   const actFilter = sp.activity ?? "";
   const view: View = sp.view ?? "engagement";
 
-  const allUsers = db.select().from(users).all();
-  const allEng = db.select().from(engagements).all();
+  const allUsers = await db.select().from(users);
+  const allEng = await db.select().from(engagements);
   const userById = new Map(allUsers.map((u) => [u.id, u] as const));
   const engById = new Map(allEng.map((e) => [e.id, e] as const));
 
-  const rows = db
+  const rows = await db
     .select({
       entryId: timesheetEntries.id,
       weekId: timesheetWeeks.id,
@@ -61,8 +61,7 @@ export default async function ReportsPage({
     })
     .from(timesheetEntries)
     .innerJoin(timesheetWeeks, eq(timesheetEntries.weekId, timesheetWeeks.id))
-    .where(and(gte(timesheetWeeks.weekStart, from), lte(timesheetWeeks.weekStart, to)))
-    .all();
+    .where(and(gte(timesheetWeeks.weekStart, from), lte(timesheetWeeks.weekStart, to)));
 
   const filtered = rows.filter(
     (r) =>

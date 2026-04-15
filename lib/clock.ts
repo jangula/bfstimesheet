@@ -3,25 +3,26 @@ import { clock } from "./db/schema";
 import { eq } from "drizzle-orm";
 import { addDays, format, parseISO } from "date-fns";
 
-export function getVirtualToday(): Date {
-  const row = db.select().from(clock).where(eq(clock.id, 1)).get();
+export async function getVirtualToday(): Promise<Date> {
+  const rows = await db.select().from(clock).where(eq(clock.id, 1)).limit(1);
+  const row = rows[0];
   return row ? parseISO(row.today) : new Date();
 }
 
-export function getVirtualTodayISO(): string {
-  return format(getVirtualToday(), "yyyy-MM-dd");
+export async function getVirtualTodayISO(): Promise<string> {
+  return format(await getVirtualToday(), "yyyy-MM-dd");
 }
 
-export function advanceVirtualClock(days = 1) {
-  const today = getVirtualToday();
+export async function advanceVirtualClock(days = 1) {
+  const today = await getVirtualToday();
   const next = addDays(today, days);
-  db.update(clock)
+  await db
+    .update(clock)
     .set({ today: format(next, "yyyy-MM-dd") })
-    .where(eq(clock.id, 1))
-    .run();
+    .where(eq(clock.id, 1));
   return format(next, "yyyy-MM-dd");
 }
 
-export function resetVirtualClock(iso: string) {
-  db.update(clock).set({ today: iso }).where(eq(clock.id, 1)).run();
+export async function resetVirtualClock(iso: string) {
+  await db.update(clock).set({ today: iso }).where(eq(clock.id, 1));
 }

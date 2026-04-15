@@ -10,7 +10,7 @@ export default async function OutboxPage() {
   if (!user) redirect("/");
   if (user.role !== "partner" && user.role !== "admin") redirect("/timesheet");
 
-  const rows = db.select().from(sentEmails).orderBy(desc(sentEmails.sentAt)).limit(200).all();
+  const rows = await db.select().from(sentEmails).orderBy(desc(sentEmails.sentAt)).limit(200);
 
   return (
     <div>

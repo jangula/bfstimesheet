@@ -14,21 +14,21 @@ export async function POST(req: Request) {
   const { days } = (await req.json().catch(() => ({ days: 1 }))) as { days?: number };
 
   if (days === -999) {
-    resetVirtualClock("2026-04-13");
-    logAudit(user, "clock", "virtual", "reset", { to: "2026-04-13" });
+    await resetVirtualClock("2026-04-13");
+    await logAudit(user, "clock", "virtual", "reset", { to: "2026-04-13" });
     return NextResponse.json({ today: "2026-04-13" });
   }
 
   // Step through each day so weekly/monthly cron windows don't get skipped
   const steps = Math.max(1, Math.min(30, days ?? 1));
   const allActions: unknown[] = [];
-  let newDate = getVirtualTodayISO();
+  let newDate = await getVirtualTodayISO();
   for (let i = 0; i < steps; i++) {
-    newDate = advanceVirtualClock(1);
-    const result = runEscalation(newDate);
+    newDate = await advanceVirtualClock(1);
+    const result = await runEscalation(newDate);
     allActions.push(...result.actions);
   }
-  logAudit(user, "clock", "virtual", "advance", {
+  await logAudit(user, "clock", "virtual", "advance", {
     to: newDate,
     steps,
     actions: allActions.length,
@@ -37,5 +37,5 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json({ today: getVirtualTodayISO() });
+  return NextResponse.json({ today: await getVirtualTodayISO() });
 }

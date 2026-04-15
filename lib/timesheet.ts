@@ -13,42 +13,40 @@ export function weekDays(weekStart: string): string[] {
   return Array.from({ length: 5 }, (_, i) => format(addDays(d, i), "yyyy-MM-dd"));
 }
 
-export function getOrCreateWeek(userId: string, weekStart: string) {
-  const existing = db
+export async function getOrCreateWeek(userId: string, weekStart: string) {
+  const existingRows = await db
     .select()
     .from(timesheetWeeks)
     .where(and(eq(timesheetWeeks.userId, userId), eq(timesheetWeeks.weekStart, weekStart)))
-    .get();
-  if (existing) return existing;
+    .limit(1);
+  if (existingRows[0]) return existingRows[0];
   const id = randomUUID();
-  db.insert(timesheetWeeks)
-    .values({ id, userId, weekStart, status: "draft" })
-    .run();
-  return db.select().from(timesheetWeeks).where(eq(timesheetWeeks.id, id)).get()!;
+  await db.insert(timesheetWeeks).values({ id, userId, weekStart, status: "draft" });
+  const rows = await db.select().from(timesheetWeeks).where(eq(timesheetWeeks.id, id)).limit(1);
+  return rows[0]!;
 }
 
-export function getWeekWithEntries(userId: string, weekStart: string) {
-  const week = getOrCreateWeek(userId, weekStart);
-  const entries = db
+export async function getWeekWithEntries(userId: string, weekStart: string) {
+  const week = await getOrCreateWeek(userId, weekStart);
+  const entries = await db
     .select()
     .from(timesheetEntries)
-    .where(eq(timesheetEntries.weekId, week.id))
-    .all();
+    .where(eq(timesheetEntries.weekId, week.id));
   return { week, entries };
 }
 
-export function listActiveEngagements() {
-  return db.select().from(engagements).where(eq(engagements.active, true)).all();
+export async function listActiveEngagements() {
+  return await db.select().from(engagements).where(eq(engagements.active, true));
 }
 
-export function upsertEntry(
+export async function upsertEntry(
   weekId: string,
   engagementId: string,
   date: string,
   hours: number,
   activityCode: string | null = null,
 ) {
-  const existing = db
+  const existingRows = await db
     .select()
     .from(timesheetEntries)
     .where(
@@ -58,49 +56,51 @@ export function upsertEntry(
         eq(timesheetEntries.date, date),
       ),
     )
-    .get();
+    .limit(1);
+  const existing = existingRows[0];
   if (existing) {
     if (hours <= 0) {
-      db.delete(timesheetEntries).where(eq(timesheetEntries.id, existing.id)).run();
+      await db.delete(timesheetEntries).where(eq(timesheetEntries.id, existing.id));
       return;
     }
-    db.update(timesheetEntries)
+    await db
+      .update(timesheetEntries)
       .set({ hours, activityCode })
-      .where(eq(timesheetEntries.id, existing.id))
-      .run();
+      .where(eq(timesheetEntries.id, existing.id));
     return;
   }
   if (hours <= 0) return;
-  db.insert(timesheetEntries)
-    .values({ id: randomUUID(), weekId, engagementId, date, hours, activityCode })
-    .run();
+  await db
+    .insert(timesheetEntries)
+    .values({ id: randomUUID(), weekId, engagementId, date, hours, activityCode });
 }
 
-export function weeksForManager(managerId: string, status?: "submitted" | "approved" | "rejected" | "draft") {
-  const reports = db.select().from(users).where(eq(users.managerId, managerId)).all();
+export async function weeksForManager(
+  managerId: string,
+  status?: "submitted" | "approved" | "rejected" | "draft",
+) {
+  const reports = await db.select().from(users).where(eq(users.managerId, managerId));
   const reportIds = reports.map((u) => u.id);
   if (reportIds.length === 0) return [];
-  const rows = db
+  const rows = await db
     .select()
     .from(timesheetWeeks)
     .where(
       status
         ? and(inArray(timesheetWeeks.userId, reportIds), eq(timesheetWeeks.status, status))
         : inArray(timesheetWeeks.userId, reportIds),
-    )
-    .all();
+    );
   const userById = new Map(reports.map((r) => [r.id, r] as const));
   return rows.map((r) => ({ week: r, user: userById.get(r.userId)! }));
 }
 
-export function entriesForWeek(weekId: string) {
-  return db.select().from(timesheetEntries).where(eq(timesheetEntries.weekId, weekId)).all();
+export async function entriesForWeek(weekId: string) {
+  return await db.select().from(timesheetEntries).where(eq(timesheetEntries.weekId, weekId));
 }
 
-export function weeksInRange(fromIso: string, toIso: string) {
-  return db
+export async function weeksInRange(fromIso: string, toIso: string) {
+  return await db
     .select()
     .from(timesheetWeeks)
-    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)))
-    .all();
+    .where(and(gte(timesheetWeeks.weekStart, fromIso), lte(timesheetWeeks.weekStart, toIso)));
 }

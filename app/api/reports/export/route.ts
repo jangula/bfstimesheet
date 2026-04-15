@@ -27,12 +27,12 @@ export async function GET(req: Request) {
   const engFilter = url.searchParams.get("engagement") ?? "";
   const actFilter = url.searchParams.get("activity") ?? "";
 
-  const allUsers = db.select().from(users).all();
-  const allEng = db.select().from(engagements).all();
+  const allUsers = await db.select().from(users);
+  const allEng = await db.select().from(engagements);
   const userById = new Map(allUsers.map((u) => [u.id, u] as const));
   const engById = new Map(allEng.map((e) => [e.id, e] as const));
 
-  const rows = db
+  const rows = await db
     .select({
       entryId: timesheetEntries.id,
       userId: timesheetWeeks.userId,
@@ -45,8 +45,7 @@ export async function GET(req: Request) {
     })
     .from(timesheetEntries)
     .innerJoin(timesheetWeeks, eq(timesheetEntries.weekId, timesheetWeeks.id))
-    .where(and(gte(timesheetWeeks.weekStart, from), lte(timesheetWeeks.weekStart, to)))
-    .all();
+    .where(and(gte(timesheetWeeks.weekStart, from), lte(timesheetWeeks.weekStart, to)));
 
   const filtered = rows.filter(
     (r) =>
@@ -99,7 +98,7 @@ export async function GET(req: Request) {
   }
   const body = lines.join("\n") + "\n";
 
-  logAudit(user, "report", "csv_export", "export", {
+  await logAudit(user, "report", "csv_export", "export", {
     rows: filtered.length,
     from,
     to,

@@ -20,10 +20,10 @@ export default async function TimesheetPage({
   if (!user) redirect("/");
 
   const sp = await searchParams;
-  const today = getVirtualTodayISO();
+  const today = await getVirtualTodayISO();
   const weekStart = mondayOf(sp.week ?? today);
-  const { week, entries } = getWeekWithEntries(user.id, weekStart);
-  const engagements = listActiveEngagements();
+  const { week, entries } = await getWeekWithEntries(user.id, weekStart);
+  const engagements = await listActiveEngagements();
   const days = weekDays(weekStart);
 
   const prev = format(addDays(parseISO(weekStart), -7), "yyyy-MM-dd");

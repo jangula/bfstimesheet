@@ -23,34 +23,37 @@ type Result = { ok: true } | { ok: false; error: string };
 
 export async function saveDraft(payload: SavePayload): Promise<Result> {
   const user = await requireUser();
-  const week = db.select().from(timesheetWeeks).where(eq(timesheetWeeks.id, payload.weekId)).get();
+  const weekRows = await db
+    .select()
+    .from(timesheetWeeks)
+    .where(eq(timesheetWeeks.id, payload.weekId))
+    .limit(1);
+  const week = weekRows[0];
   if (!week) return { ok: false, error: "Week not found" };
   if (week.userId !== user.id) return { ok: false, error: "Not your timesheet" };
   if (week.status === "submitted" || week.status === "approved") {
     return { ok: false, error: "Already submitted — can't edit" };
   }
 
-  db.delete(timesheetEntries).where(eq(timesheetEntries.weekId, week.id)).run();
+  await db.delete(timesheetEntries).where(eq(timesheetEntries.weekId, week.id));
   for (const e of payload.entries) {
     if (!(e.hours > 0)) continue;
     const code = e.activityCode && ACTIVITY_CODE_SET.has(e.activityCode) ? e.activityCode : null;
-    db.insert(timesheetEntries)
-      .values({
-        id: randomUUID(),
-        weekId: week.id,
-        engagementId: e.engagementId,
-        date: e.date,
-        hours: e.hours,
-        activityCode: code,
-      })
-      .run();
+    await db.insert(timesheetEntries).values({
+      id: randomUUID(),
+      weekId: week.id,
+      engagementId: e.engagementId,
+      date: e.date,
+      hours: e.hours,
+      activityCode: code,
+    });
   }
-  db.update(timesheetWeeks)
+  await db
+    .update(timesheetWeeks)
     .set({ status: "draft", updatedAt: new Date() })
-    .where(eq(timesheetWeeks.id, week.id))
-    .run();
+    .where(eq(timesheetWeeks.id, week.id));
 
-  logAudit(user, "timesheet_week", week.id, "draft_saved", {
+  await logAudit(user, "timesheet_week", week.id, "draft_saved", {
     entries: payload.entries.filter((e) => e.hours > 0).length,
   });
   revalidatePath("/timesheet");
@@ -59,16 +62,21 @@ export async function saveDraft(payload: SavePayload): Promise<Result> {
 
 export async function submitWeek(weekId: string): Promise<Result> {
   const user = await requireUser();
-  const week = db.select().from(timesheetWeeks).where(eq(timesheetWeeks.id, weekId)).get();
+  const weekRows = await db
+    .select()
+    .from(timesheetWeeks)
+    .where(eq(timesheetWeeks.id, weekId))
+    .limit(1);
+  const week = weekRows[0];
   if (!week) return { ok: false, error: "Week not found" };
   if (week.userId !== user.id) return { ok: false, error: "Not your timesheet" };
 
-  db.update(timesheetWeeks)
+  await db
+    .update(timesheetWeeks)
     .set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
-    .where(eq(timesheetWeeks.id, weekId))
-    .run();
+    .where(eq(timesheetWeeks.id, weekId));
 
-  logAudit(user, "timesheet_week", weekId, "submitted");
+  await logAudit(user, "timesheet_week", weekId, "submitted");
   revalidatePath("/timesheet");
   revalidatePath("/approvals");
   return { ok: true };

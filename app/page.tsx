@@ -15,7 +15,7 @@ export default async function Home() {
   const current = await getCurrentUser();
   if (current) redirect("/timesheet");
 
-  const all = db.select().from(users).orderBy(asc(users.role), asc(users.name)).all();
+  const all = await db.select().from(users).orderBy(asc(users.role), asc(users.name));
   const byRole = {
     partner: all.filter((u) => u.role === "partner"),
     lead: all.filter((u) => u.role === "lead"),
