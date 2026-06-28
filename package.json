@@ -20,7 +20,7 @@
     "postgres": "^3.4.9",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "recharts": "^2.15.0",
+    "recharts": "^3.9.0",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
